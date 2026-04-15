@@ -1,9 +1,10 @@
 import React from 'react'
 
-const page = () => {
+const page = async () => {
+
   return (
-    <div>
-      
+    <div className='pt-20'>
+
     </div>
   )
 }
