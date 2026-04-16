@@ -16,7 +16,7 @@ const navbar = () => {
   const { user } = useUser();
 
   return (
-    <header className=' w-full px-10 lg:px-40 z-50 fixed bg-("--bg-primary")'>
+    <header className=' w-full px-10 lg:px-40 z-50 fixed bg-[#f8f4e9]'>
       <div className='flex navbar-height items-center justify-between'>
         <Link href={"/"} className='flex gap-0.5 align-middle items-center '>
           <Image src={"/assets/logo.png"} width={42} height={26} alt=''></Image>
@@ -36,15 +36,19 @@ const navbar = () => {
               )
             })}
           </nav>
-          <Show when="signed-out">
-            <SignInButton mode='modal' />
-          </Show>
-          <Show when="signed-in">
-            <div className='nav-user-link gap-1'>
-              <UserButton />
-              {user?.firstName && (<Link href={"/subscriptions"} className='nav-user-name'>{user.firstName}</Link>)}
-            </div>
-          </Show>
+
+          <div className="flex gap-4">
+            <Show when="signed-out">
+              <SignInButton mode='modal' />
+            </Show>
+            <Show when="signed-in">
+              <div className='nav-user-link gap-1'>
+                <UserButton />
+                {user?.firstName && (<Link href={"/subscriptions"} className='nav-user-name'>{user.firstName}</Link>)}
+              </div>
+            </Show>
+          </div>
+
         </div>
       </div>
     </header>
