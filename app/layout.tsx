@@ -35,7 +35,7 @@ export default function RootLayout({
         lang="en"
         className={cn("h-full", "antialiased", ibmPlexSerif.variable, monaSans.variable, "font-sans", "relative")}
       >
-        <body className="min-h-full flex flex-col">
+        <body className="min-h-full flex flex-col max-w-[1440px] mx-auto">
           <Navbar />
           {children}
         </body>
