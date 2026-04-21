@@ -8,6 +8,8 @@ import { UploadCloud, ImageIcon } from 'lucide-react'
 import { voiceOptions as VOICE_OPTIONS_CONST, voiceCategories, DEFAULT_VOICE } from '@/lib/constants'
 import { Button } from './button'
 import { uploadSchema } from '@/lib/zod'
+import { toast } from 'sonner'
+import {useAuth, useUser} from "@clerk/nextjs";
 
 type UploadFormValues = z.infer<typeof uploadSchema>
 
@@ -32,6 +34,8 @@ const formatSelectedFile = (fileList?: FileList | null) => {
 }
 
 const UploadForm = () => {
+  const {userId} = useAuth()
+
   const {
     register,
     handleSubmit,
@@ -65,8 +69,18 @@ const UploadForm = () => {
   const coverImageError = getErrorMessage(errors.coverImage)
 
   const onSubmit = (values: UploadFormValues) => {
-    console.log('Form submitted', values)
-    // Replace this with actual upload / synthesis flow.
+    if (!userId) {
+      return toast.error("You must be signed in to upload a book.")
+    }
+    if (userId){
+      try{
+        console.log('Form submitted', values)
+
+      }catch(e){
+        console.error('Error during upload:', e)
+        toast.error("An error occurred during upload. Please try again.")
+      }
+    }
   }
 
   return (
