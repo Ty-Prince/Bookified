@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,9 +10,15 @@ import { voiceOptions as VOICE_OPTIONS_CONST, voiceCategories, DEFAULT_VOICE } f
 import { Button } from './button'
 import { uploadSchema } from '@/lib/zod'
 import { toast } from 'sonner'
-import {useAuth, useUser} from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { checkBookExists, createbook, saveBookSegments } from '@/lib/actions/book.actions'
+import { useRouter } from 'next/navigation'
+import { parsePDFFile } from '@/lib/utils'
+import { upload } from '@vercel/blob/client'
+import Loading from './loading'
 
-type UploadFormValues = z.infer<typeof uploadSchema>
+type UploadFormInput = z.input<typeof uploadSchema>
+type UploadFormOutput = z.output<typeof uploadSchema>
 
 const voiceOptions = Object.entries(VOICE_OPTIONS_CONST).map(([key, info]) => {
   const group = voiceCategories?.male?.includes(key)
@@ -34,23 +41,29 @@ const formatSelectedFile = (fileList?: FileList | null) => {
 }
 
 const UploadForm = () => {
-  const {userId} = useAuth()
+  const { userId } = useAuth()
+  const router = useRouter()
 
   const {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors, isSubmitting },
-  } = useForm<UploadFormValues>({
+  } = useForm<UploadFormInput, any, UploadFormOutput>({
     resolver: zodResolver(uploadSchema),
     defaultValues: {
-      voice: DEFAULT_VOICE,
+      title: '',
+      author: '',
+      voice: '',
+      pdfFile: undefined,
+      coverImage: undefined,
     },
   })
 
-  const bookFile = watch('bookFile') as FileList | undefined
+  const pdfFile = watch('pdfFile') as FileList | undefined
   const coverImage = watch('coverImage') as FileList | undefined
-  const selectedBookFile = formatSelectedFile(bookFile)
+  const selectedpdfFile = formatSelectedFile(pdfFile)
   const selectedCoverImage = formatSelectedFile(coverImage)
 
   const getErrorMessage = (error: unknown) => {
@@ -65,18 +78,93 @@ const UploadForm = () => {
     return undefined
   }
 
-  const bookFileError = getErrorMessage(errors.bookFile)
+  const bookFileError = getErrorMessage(errors.pdfFile)
   const coverImageError = getErrorMessage(errors.coverImage)
 
-  const onSubmit = (values: UploadFormValues) => {
+  const onSubmit = async (data: UploadFormOutput) => {
     if (!userId) {
       return toast.error("You must be signed in to upload a book.")
     }
-    if (userId){
-      try{
-        console.log('Form submitted', values)
+    if (userId) {
+      try {
+        console.log('Form submitted', data)
 
-      }catch(e){
+        const existCheck = await checkBookExists(data.title)
+
+        if (existCheck.exist && existCheck.data) {
+          toast.info("A book with this title already exists. Please choose a different title.")
+          reset()
+          router.push(`/books/${existCheck.data.slug}`)
+          return;
+        }
+
+        const filetitle = data.title.replace(/\s+/g, "-").toLowerCase();
+        const pdfFile = data.pdfFile;
+
+        const parsePDF = await parsePDFFile(pdfFile)
+
+        if (parsePDF.content.length === 0) {
+          toast.error("Failed to parse PDF content. Please ensure the file is a valid PDF and try again.")
+          return;
+        }
+
+        const uploadedPDFBlob = await upload(filetitle, pdfFile, {
+          access: 'public',
+          handleUploadUrl: '/api/uploads',
+          contentType: 'application/pdf'
+        })
+
+        let coverUrl: string;
+
+        if (data.coverImage) {
+          const uploadedcoverBlob = await upload(`${filetitle}_cover.png`, data.coverImage, {
+            access: 'public',
+            handleUploadUrl: '/api/uploads',
+            contentType: 'image/png'
+          })
+          coverUrl = uploadedcoverBlob.url;
+        } else {
+          const response = await fetch(parsePDF.cover)
+          const blob = await response.blob();
+
+          const uploadedcoverBlob = await upload(`${filetitle}_cover.png`, blob, {
+            access: 'public',
+            handleUploadUrl: '/api/uploads',
+            contentType: 'image/png'
+          })
+          coverUrl = uploadedcoverBlob.url;
+        }
+        const book = await createbook({
+          clerkId: userId,
+          title: data.title,
+          author: data.author,
+          persona: data.voice,
+          fileBlobKey: uploadedPDFBlob.pathname,
+          fileURL: uploadedPDFBlob.url,
+          coverURL: coverUrl,
+          fileSize: pdfFile.size,
+        })
+
+        if(!book.success) throw new Error("Failed to create book record in database.");
+
+        if(book.alreadyExists){
+          toast.info("Book already exists.");
+          reset();
+          router.push(`/books/${book.data.slug}`);
+          return;
+        }
+
+        const segments = await saveBookSegments(book.data._id, userId, parsePDF.content)
+
+        if(!segments.success) {
+          toast.error("Failed to save book segments. Please try again.")
+          throw new Error("Failed to save book segments in database.")
+        };
+
+        reset();
+        router.push("/")
+
+      } catch (e) {
         console.error('Error during upload:', e)
         toast.error("An error occurred during upload. Please try again.")
       }
@@ -85,31 +173,32 @@ const UploadForm = () => {
 
   return (
     <section className="mx-auto mt-10 max-w-4xl rounded-[12px] bg-white/90 border border-[rgba(33,42,59,0.08)] p-8 shadow-soft-md">
+      {isSubmitting && <Loading message="Uploading book — this may take a few moments." />}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-10">
         <div className="space-y-8">
           <div>
             <label className="text-base font-medium text-(--text-primary)">Book PDF File</label>
             <label
-              htmlFor="bookFile"
-                className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[12px] border border-[rgba(33,42,59,0.12)] bg-[#fcf6ed] px-6 py-12 text-center transform transition-transform duration-150 ease-in-out hover:-translate-y-1 hover:scale-100 hover:shadow-soft-lg"
+              htmlFor="pdfFile"
+              className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[12px] border border-[rgba(33,42,59,0.12)] bg-[#fcf6ed] px-6 py-12 text-center transform transition-transform duration-150 ease-in-out hover:-translate-y-1 hover:scale-100 hover:shadow-soft-lg"
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#e9dcc8] text-(--text-primary)">
                 <UploadCloud size={28} />
               </div>
               <p className="text-lg font-semibold text-(--text-primary)">Click to upload PDF</p>
               <p className="text-sm text-(--text-secondary)">PDF file (max 50MB)</p>
-              {selectedBookFile ? (
-                <p className="mt-2 text-sm text-(--text-primary)">Selected: {selectedBookFile}</p>
+              {selectedpdfFile ? (
+                <p className="mt-2 text-sm text-(--text-primary)">Selected: {selectedpdfFile}</p>
               ) : (
                 <p className="mt-2 text-sm text-(--text-secondary)">Drag & drop or browse files</p>
               )}
             </label>
             <input
-              id="bookFile"
+              id="pdfFile"
               type="file"
               accept="application/pdf"
               className="sr-only"
-              {...register('bookFile')}
+              {...register('pdfFile')}
             />
             {bookFileError && (
               <p className="mt-2 text-sm text-red-600">{bookFileError}</p>
@@ -120,7 +209,7 @@ const UploadForm = () => {
             <label className="text-base font-medium text-(--text-primary)">Cover Image (Optional)</label>
             <label
               htmlFor="coverImage"
-                className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[12px] border border-[rgba(33,42,59,0.12)] bg-[#fcf6ed] px-6 py-12 text-center transform transition-transform duration-150 ease-in-out hover:-translate-y-1 hover:scale-100 hover:shadow-soft-lg"
+              className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[12px] border border-[rgba(33,42,59,0.12)] bg-[#fcf6ed] px-6 py-12 text-center transform transition-transform duration-150 ease-in-out hover:-translate-y-1 hover:scale-100 hover:shadow-soft-lg"
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#e9dcc8] text-(--text-primary)">
                 <ImageIcon size={26} />
@@ -181,7 +270,7 @@ const UploadForm = () => {
                   .map((option) => (
                     <label
                       key={option.value}
-                      className="rounded-[22px] border border-[rgba(33,42,59,0.12)] bg-[#fffdf8] p-4 transform transition-transform duration-150 ease-in-out hover:scale-105 hover:shadow-soft-lg"
+                      className="has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 rounded-[22px] border border-[rgba(33,42,59,0.12)] bg-[#fffdf8] p-4 transform transition-transform duration-150 ease-in-out hover:scale-105 hover:shadow-soft-lg"
                     >
                       <input
                         type="radio"
@@ -203,7 +292,7 @@ const UploadForm = () => {
                   .map((option) => (
                     <label
                       key={option.value}
-                      className="rounded-[22px] border border-[rgba(33,42,59,0.12)] bg-[#fffdf8] p-4 transform transition-transform duration-150 ease-in-out hover:scale-105 hover:shadow-soft-lg"
+                      className="has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 rounded-[22px] border border-[rgba(33,42,59,0.12)] bg-[#fffdf8] p-4 transform transition-transform duration-150 ease-in-out hover:scale-105 hover:shadow-soft-lg"
                     >
                       <input
                         type="radio"
