@@ -37,12 +37,12 @@ export const checkBookExists = async (title: string) => {
         else {
             return {
                 exist: false,
-
+                data: null
             }
         }
     } catch (e) {
         console.error("Error checking book exist:", e);
-        return serializedata({ exist: false, error: e });
+        return serializedata({ exist: false, error: e , data: null});
     }
 }
 
@@ -74,7 +74,7 @@ export const createbook = async (data: CreateBook) => {
 
     } catch (error) {
         console.error("Database connection error:", error);
-        return serializedata({ success: false, message: "Database connection failed" , alreadyExists : false});
+        return serializedata({ success: false, message: "Database connection failed" , alreadyExists : false , data: ''});
 
     }
 
@@ -119,13 +119,13 @@ export const getbookbyslug = async (slug: string) => {
         const book = await Book.findOne({ slug }).lean();
 
         if (!book) {
-            return serializedata({ success: false, error: "Book not found" });
+            return serializedata({ success: false, error: "Book not found" ,data : '' });
         }
 
         return { success: true, data: serializedata(book) };
     } catch (e) {
         console.error("Error fetching book by slug:", e);
-        return serializedata({ success: false, error: e });
+        return serializedata({ success: false, error: e ,data : ''});
     }
 };
 

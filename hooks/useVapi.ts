@@ -113,7 +113,7 @@ export const useVapi = (book: IBook) => {
 
           const text = transcript?.text ?? transcript?.content ?? transcript?.transcript ?? payload?.text ?? payload?.content
           const roleRaw = transcript?.role ?? transcript?.speaker ?? transcript?.from ?? payload?.speaker
-          const isFinal = transcript?.final ?? transcript?.isFinal ?? transcript?.type === 'final' ?? (transcript?.partial === false)
+          const isFinal = transcript?.final ?? transcript?.isFinal ?? (transcript?.type === 'final' || transcript?.partial === false)
 
           if (!text) return
 
@@ -329,7 +329,7 @@ export const useVapi = (book: IBook) => {
       setstatus('starting')
     } catch (e) {
       console.error('error starting call', e)
-      const msg = typeof e === 'string' ? e : (e?.message ?? JSON.stringify(e))
+      const msg = typeof e === 'string' ? e : (e ?? JSON.stringify(e))
       if (/eject|ejected|ejection|meeting ended?/i.test(String(msg))) {
         setlimiterror(String(msg))
       } else {
