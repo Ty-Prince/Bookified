@@ -17,7 +17,7 @@ export const getAllbooks = async()=>{
         
     }catch(e){
         console.error("Error fetching books:", e);
-        return serializedata({ success: false, error: e });
+        return serializedata({ success: false, data : [],error: e });
     }
 }
 

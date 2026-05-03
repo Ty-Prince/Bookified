@@ -49,9 +49,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       if (name === 'search_book') {
         const result = await processBookSearch(parsed.bookId, parsed.query);
-        return NextResponse.json(
-          result
-        );
+        return NextResponse.json( result );
       }
 
       return NextResponse.json({ result: `Unknown function: ${name}` });
