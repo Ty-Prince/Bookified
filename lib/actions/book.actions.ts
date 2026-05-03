@@ -2,9 +2,10 @@
 
 import { connectToDatabase } from "@/database/mongoose";
 import { CreateBook, TextSegment } from "@/types";
-import { genrateslug, serializedata } from "@/lib/utils";
+import { escapeRegex, genrateslug, serializedata } from "@/lib/utils";
 import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/bookSegment.model";
+import mongoose from "mongoose";
 
 
 export const getAllbooks = async()=>{
@@ -133,27 +134,50 @@ export const searchBookSegment = async (bookId: string, query: string, numSegmen
         await connectToDatabase();
 
         if (!bookId || !query) {
-            return serializedata({ success: false, error: 'Missing bookId or query' });
+            return serializedata({ success: false, error: 'Missing bookId or query' , data: [] });
         }
 
-        const segments = await BookSegment.find(
-            { bookId, $text: { $search: query } },
+        const bookObjectId = new mongoose.Types.ObjectId(bookId);
+
+        let segments : Record<string, any>[] = [];
+        try{
+        segments = await BookSegment.find(
+            { bookId : bookObjectId, $text: { $search: query } },
             { score: { $meta: 'textScore' }, content: 1 }
         )
+        
+            .select('_id bookId content segmentIndex pageNumber wordCount')
             .sort({ score: { $meta: 'textScore' } })
             .limit(Number(numSegments) || 3)
             .lean();
+    }catch(e){
+        segments = [];
+    }
+        if (segments.length === 0) {
+            const keywords = query.split(/\s+/).filter((k) => k.length > 2)
+            const pattens = keywords.map(escapeRegex).join('|')
 
-        if (!segments || segments.length === 0) {
-            return serializedata({ success: true, data: null, message: 'No matching segments found' });
+            segments = await BookSegment.find(
+            { bookId : bookObjectId,
+             content : { $regex: pattens , $options : 'i' } },
+        )
+        
+            .select('_id bookId content segmentIndex pageNumber wordCount')
+            .sort({segmentIndex : 1})
+            .limit(Number(numSegments) || 3)
+            .lean();   
+
         }
+        
+        console.log(`Search complete. Found ${segments.length} results`);
 
-        const combined = segments.map((s: any) => s.content || '').join('\n\n');
-
-        return serializedata({ success: true, data: { combined, segments: segments.map(serializedata) } });
-    } catch (err) {
-        console.error('Error searching book segments:', err);
-        const message = err instanceof Error ? err.message : String(err);
-        return serializedata({ success: false, error: message });
+        return serializedata({ success: true, data: segments});
+    } catch (e) {
+        console.error('Error searching segments:', e);
+        return {
+            success: false,
+            error: (e as Error).message,
+            data: [],
+        };
     }
 }

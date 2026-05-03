@@ -17,6 +17,10 @@ export const genrateslug = (text : string) : string => {
       .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
 }
 
+export const escapeRegex = (str: string): string => {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
 export const serializedata = <T>(data : T) : T=> {
     return JSON.parse(JSON.stringify(data));
 }
