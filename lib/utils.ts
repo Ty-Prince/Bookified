@@ -1,6 +1,7 @@
 import { TextSegment } from "@/types"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { DEFAULT_VOICE, voiceOptions } from "./constants"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -115,3 +116,21 @@ export const parsePDFFile = async (file : File)=> {
   }
 
 }
+
+export const getVoice = (persona?: string) =>{
+  if(!persona) return voiceOptions[DEFAULT_VOICE]
+
+  const voiceEntry = Object.values(voiceOptions).find((v) => v.id === persona)
+  if(voiceEntry) return voiceEntry;
+
+  const voiceById = voiceOptions[persona as keyof typeof voiceOptions]
+  if(voiceById) return voiceById;
+
+  return voiceOptions[DEFAULT_VOICE]
+}
+
+export const formatDuration = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
