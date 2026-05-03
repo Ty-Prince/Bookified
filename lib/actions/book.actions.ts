@@ -119,13 +119,13 @@ export const getbookbyslug = async (slug: string) => {
         const book = await Book.findOne({ slug }).lean();
 
         if (!book) {
-            return serializedata({ success: false, error: "Book not found" });
+            return serializedata({ success: false, error: "Book not found" ,data : '' });
         }
 
         return { success: true, data: serializedata(book) };
     } catch (e) {
         console.error("Error fetching book by slug:", e);
-        return serializedata({ success: false, error: e });
+        return serializedata({ success: false, error: e ,data : ''});
     }
 };
 
